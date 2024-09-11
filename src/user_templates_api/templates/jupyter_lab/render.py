@@ -2,7 +2,7 @@ import inspect
 import json
 from pathlib import Path
 
-from django.template import engines
+from jinja2 import Environment, BaseLoader
 from nbformat.v4 import new_code_cell, new_markdown_cell
 
 import user_templates_api.templates.jupyter_lab.utils.utils as jl_utils
@@ -33,7 +33,7 @@ class JupyterLabRender:
         return []
 
     def json_generate_template_data(self, data):
-        django_engine = engines["django"]
+        engine = Environment(loader=BaseLoader())
 
         uuids = data["uuids"]
         group_token = data["group_token"]
@@ -62,19 +62,19 @@ class JupyterLabRender:
                 elif src == "get_anndata_cells":
                     cells += jl_utils.get_anndata_cells(uuids, util_client)
             elif cell_type == "code_cell":
-                template = django_engine.from_string(src)
+                template = engine.from_string(src)
                 # Need to do something w/ the source to make sure that it has its vars replaced
                 # Have to use append here since the nbformat cell object has an add/iadd function that is really a merge
-                cells.append(new_code_cell(template.render(data)))
+                cells.append(new_code_cell(template.render(**data).strip()))
             elif cell_type == "markdown_cell":
-                template = django_engine.from_string(src)
+                template = engine.from_string(src)
                 # Need to do something w/ the source to make sure that it has its vars replaced
-                cells.append(new_markdown_cell(template.render(data)))
+                cells.append(new_markdown_cell(template.render(**data).strip()))
 
         return cells
 
     def jinja_generate_template_data(self, data):
-        django_engine = engines["django"]
+        engine = Environment(loader=BaseLoader())
 
         group_token = data["group_token"]
 
@@ -86,10 +86,11 @@ class JupyterLabRender:
         class_file_path = Path(class_file_path)
         # Grab the parent path and append template.txt
         template_file_path = class_file_path.parent / "template.txt"
+
         # Load that filepath since it should be the json template
         template_file = open(template_file_path)
-        template = django_engine.from_string(template_file.read())
-        rendered_template = template.render(data).strip()
+        rtemplate = engine.from_string(template_file.read())
+        rendered_template = rtemplate.render(**data).strip()
         rendered_template = json.loads(rendered_template) if rendered_template else {}
 
         # Update this so that it returns actual JSON not text
